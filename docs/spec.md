@@ -1,6 +1,6 @@
 # SaperAi: сапёр с ИИ
 
-Игра из ИИ-Игротеки на Python. Общие правила — `C:\Work\PythonAiGames\docs\contract.md`, очередь — волна 3.
+Игра из ИИ-Игротеки на Python. Общие правила — `PythonAiGames/docs/contract.md`, очередь — волна 3.
 
 ## 1. Игра
 
