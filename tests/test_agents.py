@@ -41,6 +41,8 @@ def test_first_move_is_centre():
     obs = Observation(30, 16, 99, [HIDDEN] * 480)
     mv = StrongAgent().choose(obs, random.Random(0))
     assert mv.cells == [first_cell(obs)] == [8 * 30 + 15]
+    safe = Observation(30, 16, 99, [HIDDEN] * 480, first_click="safe")
+    assert StrongAgent().choose(safe, random.Random(0)).cells == [0]
 
 
 def test_guess_takes_lowest_risk():

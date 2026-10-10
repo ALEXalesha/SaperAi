@@ -3,7 +3,6 @@
 # Gitea берёт проверки только отсюда. Меняя проверки, править оба файла.
 #
 # Потоки BLAS - по одному: ПК делят несколько задач.
-# Самопроверка окна (python main.py --selftest) добавится вместе с окном.
 name: CI
 
 on:
@@ -37,3 +36,8 @@ jobs:
 
       - name: Тесты
         run: python -m pytest -q
+
+      - name: Самопроверка без экрана
+        run: |
+          python main.py --selftest selftest.txt
+          Get-Content selftest.txt

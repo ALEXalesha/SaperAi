@@ -239,7 +239,7 @@ class Game:
     def observe(self):
         """Наблюдение для ИИ: только то, что видит игрок во время партии."""
         cells = (v if v >= 0 or v == FLAG else FLAG if v == WRONG_FLAG else HIDDEN for v in self.view())
-        return Observation(self.width, self.height, self.mines, cells)
+        return Observation(self.width, self.height, self.mines, cells, self.first_click)
 
     def xy(self, i):
         return i % self.width, i // self.width
@@ -249,21 +249,25 @@ class Game:
 
 
 class Observation:
-    """Что получает ИИ: размеры, общее число мин и видимые клетки (числа, HIDDEN, FLAG).
-    Раскладки мин тут нет - ИИ не может подсмотреть."""
+    """Что получает ИИ: размеры, общее число мин, видимые клетки (числа, HIDDEN, FLAG) и
+    правило первого клика (настройка партии, её видит и человек). Раскладки мин тут нет -
+    ИИ не может подсмотреть."""
 
-    __slots__ = ("width", "height", "mines", "cells")
+    __slots__ = ("width", "height", "mines", "cells", "first_click")
 
-    def __init__(self, width, height, mines, cells):
+    def __init__(self, width, height, mines, cells, first_click="opening"):
         self.width, self.height, self.mines = width, height, mines
         self.cells = tuple(cells)
+        self.first_click = first_click
+
+    def key(self):
+        return self.width, self.height, self.mines, self.cells, self.first_click
 
     def __eq__(self, other):
-        return isinstance(other, Observation) and (self.width, self.height, self.mines, self.cells) == \
-            (other.width, other.height, other.mines, other.cells)
+        return isinstance(other, Observation) and self.key() == other.key()
 
     def __hash__(self):
-        return hash((self.width, self.height, self.mines, self.cells))
+        return hash(self.key())
 
     def __repr__(self):
         return f"Observation({self.width}x{self.height}, {self.mines} мин)"

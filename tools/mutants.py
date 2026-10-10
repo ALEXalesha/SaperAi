@@ -56,4 +56,37 @@ MUTANTS += [
     ("agents: польза наоборот", A, "best = max(scores.values())", "best = min(scores.values())", TA),
     ("agents: новичок идёт на мину", A, "cand = [i for i, v in enumerate(obs.cells) if v < 0 and known.get(i) != 1]",
      "cand = [i for i, v in enumerate(obs.cells) if v < 0]", TA),
+    ("agents: первый клик всегда в середину", A, "    if obs.first_click == \"safe\":\n        return 0\n", "", TA),
+]
+N = "game/ai/net.py"
+TN = "tests/test_net_train.py"
+MUTANTS += [
+    ("net: флажок как открытая", N, "    hidden = cells < 0\n", "    hidden = cells == -1\n", TN),
+    ("net: без плотности мин", N, "    x[..., 10] = density[:, None, None]", "    pass", TN),
+    ("net: симметрия без отражения", N, "    if k & 1:\n        a = a[:, ::-1]", "    if False:\n        a = a[:, ::-1]", TN),
+    ("net: градиент наоборот", N, "        self.model.backward(g[..., None])", "        self.model.backward(-g[..., None])", TN),
+    ("train: снимок без Adam", "game/train/fit.py", "        self.opt.t = int(meta[\"adam_t\"])", "        pass", TN),
+    ("data: цель не от решателя", "game/train/data.py",
+     "probs = np.array([p if p is not None else 0.0 for p in a.probs]",
+     "probs = np.array([0.5 if p is not None else 0.0 for p in a.probs]", TN),
+]
+W = "game/ui/widget.py"
+BV = "game/ui/board_view.py"
+AT = "game/ui/ai_thread.py"
+TU = "tests/test_ui.py"
+MUTANTS += [
+    ("ui: подсказка не помечает партию", W, "        self.assisted = True\n        self.ai.request_hint",
+     "        self.ai.request_hint", TU),
+    ("ui: мысли не помечают партию", W, "                self.assisted = True\n            self.probs = None",
+     "                pass\n            self.probs = None", TU),
+    ("ui: партия ИИ в статистику", W, "if self.mode != \"human\" or self.assisted:", "if self.assisted:", TU),
+    ("ui: рекорды не пишутся", W, "            save_json(self.ctx.file(\"records.json\"), recs)", "            pass", TU),
+    ("ui: пауза не останавливает", W, "if self.mode == \"ai\" and not self.paused:", "if self.mode == \"ai\":", TU),
+    ("ui: ИИ флажит догадки", W, "if q == 1.0 and not self.game.flag[i]", "if q > 0.2 and not self.game.flag[i]", TU),
+    ("ui: правая кнопка открывает", BV, "            if i >= 0:\n                self.flagAt.emit(i)",
+     "            if i >= 0:\n                self.revealAt.emit(i)", TU),
+    ("ui: две кнопки не аккорд", BV, "if both or e.button() == Qt.MouseButton.MiddleButton:",
+     "if e.button() == Qt.MouseButton.MiddleButton:", TU),
+    ("ui: мысли новичка от решателя", AT, "    if level == \"novice\":", "    if False:", TU),
+    ("ui: потоки не ждут", AT, "            j.wait(max(0, int((deadline - time.monotonic()) * 1000)))", "            pass", TU),
 ]
