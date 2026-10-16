@@ -30,6 +30,26 @@ def play_ai_until(app, gw, opened_share, limit=60.0):
     pump(app, lambda: gw.game.over or gw.game.opened >= target, limit)
 
 
+def human_games(gw, count=14):
+    """Партии человека для кадра графиков: кадр знает раскладку, открывает поле или подрывается.
+    Время партии подставляется (в кадре партия идёт мгновенно)."""
+    gw.change("mode", "human")
+    gw.change("preset", "beginner")
+    for k in range(count):
+        gw.new_game(seed=200 + k)
+        g = gw.game
+        gw.on_reveal(g.n // 2)
+        if g.over:
+            continue
+        g.started -= 25 + (k * 37) % 70 if hasattr(g, "started") else 0
+        if k % 3 == 2:
+            gw.on_reveal(next(i for i in range(g.n) if g.mine[i]))
+        else:
+            for i in range(g.n):
+                if not g.mine[i] and not g.open[i]:
+                    gw.on_reveal(i)
+
+
 def main(out):
     from PySide6.QtWidgets import QApplication
 
@@ -72,9 +92,15 @@ def main(out):
         pump(app, lambda: gw.hint_cell >= 0, 10)
         pump(app, limit=0.3)
         shots.append((f"preview_hint{suffix}.png", window.grab()))
+        if not gw.history.games:              # партии человека для графиков (один раз на обе темы)
+            human_games(gw)
         gw.show_page("stats")
         pump(app, limit=0.3)
         shots.append((f"preview_stats{suffix}.png", window.grab()))
+        card = gw.stats.charts.parentWidget()
+        h = card.heightForWidth(1180)
+        card.resize(1180, h if h > 0 else card.sizeHint().height())
+        shots.append((f"preview_charts{suffix}.png", card.grab()))
         gw.show_page("play")
     for name, pix in shots:
         pix.save(os.path.join(out, name))

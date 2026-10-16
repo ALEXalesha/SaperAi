@@ -90,3 +90,11 @@ MUTANTS += [
     ("ui: мысли новичка от решателя", AT, "    if level == \"novice\":", "    if False:", TU),
     ("ui: потоки не ждут", AT, "            j.wait(max(0, int((deadline - time.monotonic()) * 1000)))", "            pass", TU),
 ]
+
+# графики статистики (aikit.charts)
+TSC = "tests/test_stats_charts.py"
+MUTANTS += [
+    ("charts: партия не в журнале", W, "        self.history.record(game)", "        pass", TSC),
+    ("charts: время победы и у поражения", W, "        if won:\n            game[\"win_time\"]", "        if True:\n            game[\"win_time\"]", TSC),
+    ("charts: рекорд - худшее время", W, 'score_key="win_time", score_better="min"', 'score_key="win_time", score_better="max"', TSC),
+]

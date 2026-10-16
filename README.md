@@ -28,6 +28,10 @@
 
 Games with a hint or AI thoughts do not count for statistics and records.
 
+Statistics show charts (the shared `aikit.charts`): your share of wins (last 20 and all games), wins and explosions on each board, the time of each game, the time of each win with your record, and the AI strength from the passport as bars. With no games yet a chart says in words what will appear.
+
+<img src="docs/preview_charts.png" width="880" alt="Statistics charts: share of wins, results by board, game time, win time and record, AI strength from the passport">
+
 ## How the AI thinks
 
 The **exact solver** (`game/ai/solver.py`) sees only what the player sees: open numbers,

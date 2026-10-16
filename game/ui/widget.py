@@ -16,7 +16,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFrame, QGridLayout
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from aikit import settings as st
-from aikit import theme
+from aikit import gamelog, theme
+from aikit.charts import GameCharts
 from aikit.storage import load_json, save_json
 from aikit.widgets import Combo, button, card, label, restyle, segmented
 from game.ai.agents import LEVELS as AI_LEVELS
@@ -288,6 +289,9 @@ def item(text, align=Qt.AlignmentFlag.AlignCenter):
     return it
 
 
+CHART_LEVELS = ("beginner", "intermediate", "expert", "custom")
+
+
 class StatsPage(QWidget):
     def __init__(self, gw):
         super().__init__()
@@ -314,6 +318,18 @@ class StatsPage(QWidget):
         self.table = table_widget(6)
         mc.addWidget(self.table)
         col.addWidget(mine)
+        # графики (правило автора 10.10 - графики в статистике всех игр с ИИ): доля побед,
+        # итоги по полям, время партии, время победы с рекордом, сила ИИ по паспорту
+        cc = card()
+        cl = QVBoxLayout(cc)
+        cl.setContentsMargins(18, 14, 18, 14)
+        cl.setSpacing(10)
+        self.charts_title = label("", "section")
+        cl.addWidget(self.charts_title)
+        self.charts = GameCharts(CHART_LEVELS, length_key="seconds", score_key="win_time", score_better="min",
+                                 passport=True)
+        cl.addWidget(self.charts)
+        col.addWidget(cc)
         pc = card()
         lay = QVBoxLayout(pc)
         lay.setContentsMargins(18, 14, 18, 14)
@@ -347,6 +363,7 @@ class StatsPage(QWidget):
             self.table.setItem(r, 4, item(f"{best[0]:.1f}" if best else "-"))
             self.table.setItem(r, 5, item(str(e["best_streak"])))
         fit_height(self.table)
+        self.refresh_charts()
         self.pass_title.setText(t("passport"))
         try:
             from game.ai.net import load_passport
@@ -382,6 +399,45 @@ class StatsPage(QWidget):
             self.net_text.show()
         else:
             self.net_text.hide()
+
+    def refresh_charts(self):
+        _refresh_charts(self)
+
+
+def passport_bars(t, rule):
+    """Столбики паспорта: поле - группа, уровень ИИ - серия, доля побед при правиле первого хода."""
+    try:
+        from game.ai.net import load_passport
+        checks = load_passport()["checks"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    by = {(c["agent"], c["level"], c["first_click"]): c["win_rate"] for c in checks}
+    levels = [lv for lv in ("beginner", "intermediate", "expert") if any(k[1] == lv for k in by)]
+    agents = [a for a in AI_LEVELS if any(k[0] == a for k in by)]
+    if not levels or not agents:
+        return None
+    keys = {"novice": "warn", "medium": "accent", "strong": "good"}
+    return ([t(lv) for lv in levels],
+            [(t("ai_" + a), keys.get(a, "accent"), [by.get((a, lv, rule), 0.0) for lv in levels]) for a in agents])
+
+
+def _refresh_charts(page):
+    t = page.gw.t
+    page.charts_title.setText(t("charts"))
+    page.charts.set_theme(page.gw.ctx.theme)
+    unit = t("unit_s")
+    page.charts.length.unit = unit
+    page.charts.records.unit = unit
+    rule = page.gw.settings["first_click"]
+    page.charts.refresh(page.gw.history.games, page.gw.ctx.lang, {k: t(k) for k in CHART_LEVELS},
+                        labels={"share": t("ch_share"), "share_empty": t("ch_share_empty"),
+                                "levels": t("ch_levels"), "levels_empty": t("ch_levels_empty"),
+                                "length": t("ch_time"), "length_empty": t("ch_time_empty"),
+                                "length_y": t("ch_seconds"),
+                                "score": t("ch_win_time"), "score_empty": t("ch_win_time_empty"),
+                                "score_y": t("ch_seconds"), "points": t("ch_win"),
+                                "passport": t("ch_passport", rule=t("rule_" + rule))},
+                        passport=passport_bars(t, rule))
 
 
 # --- настройки ---
@@ -514,6 +570,7 @@ class GameWidget(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.stack)
         self.play = PlayPage(self)
+        self.history = gamelog.GameLog(ctx.file("games.json"))
         self.stats = StatsPage(self)
         self.settings_page = SettingsPage(self)
         self.pages = {"play": self.play, "stats": self.stats, "settings": self.settings_page}
@@ -604,6 +661,7 @@ class GameWidget(QWidget):
     def apply_theme(self):
         c = theme.palette(self.ctx.theme)
         self.play.board.set_theme(self.ctx.theme)
+        self.stats.charts.set_theme(self.ctx.theme)
         for combo in self.findChildren(Combo):
             combo.set_arrow_color(c["text"])
         self.update()
@@ -766,6 +824,11 @@ class GameWidget(QWidget):
             return
         key = self.stats_key()
         self.ctx.stats.record(key, "win" if won else "loss")
+        game = {"level": self.settings["preset"], "outcome": "win" if won else "loss",
+                "seconds": round(g.elapsed(), 2)}
+        if won:
+            game["win_time"] = game["seconds"]
+        self.history.record(game)                       # журнал для графиков статистики
         if won:
             recs = self.records()
             best = sorted((recs.get(key) or []) + [round(g.elapsed(), 2)])[:RECORDS_KEEP]
