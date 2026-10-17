@@ -315,3 +315,15 @@ def test_wrapped_labels_not_clipped(app, win):
         if w.wordWrap() and w.isVisible() and w.width() > 0:
             assert w.height() >= w.heightForWidth(w.width()) - 1, w.text()
     gw.change("show_thoughts", False)
+
+
+def test_shutdown_waits_for_a_running_job(app):
+    """Проверка 17.10: мутант «потоки не ждут» выживал - закон выше закрывает окно, когда ход
+    ИИ на «Профи» уже посчитан (ходы быстрые), и ждать нечего. Здесь поток точно работает:
+    shutdown обязан дождаться его конца (в пределах 2 секунд)."""
+    from game.ui.ai_thread import AiController
+    ai = AiController()
+    ai._start(1, "move", lambda: time.sleep(0.4))
+    assert ai.busy()
+    assert ai.shutdown(2000)
+    assert not ai.busy()

@@ -76,7 +76,7 @@ The real number: **49.0 %** with "opens an area" and **38.6 %** with
 
 ## Tests
 
-231 tests (pytest); the window is tested offscreen only, with synthesized mouse events.
+232 tests (pytest); the window is tested offscreen only, with synthesized mouse events.
 
 - **Exactness law:** on small boards the solver's probabilities equal a full enumeration of all layouts.
 - **Honesty law:** two different mine layouts with the same visible board lead to the same AI decision.
