@@ -81,7 +81,8 @@ MUTANTS += [
      "                pass\n            self.probs = None", TU),
     ("ui: партия ИИ в статистику", W, "if self.mode != \"human\" or self.assisted:", "if self.assisted:", TU),
     ("ui: рекорды не пишутся", W, "            save_json(self.ctx.file(\"records.json\"), recs)", "            pass", TU),
-    ("ui: пауза не останавливает", W, "if self.mode == \"ai\" and not self.paused:", "if self.mode == \"ai\":", TU),
+    ("ui: пауза не останавливает", W, "if self.mode == \"ai\" and not self.paused and on_screen:",
+     "if self.mode == \"ai\" and on_screen:", TU),
     ("ui: ИИ флажит догадки", W, "if q == 1.0 and not self.game.flag[i]", "if q > 0.2 and not self.game.flag[i]", TU),
     ("ui: правая кнопка открывает", BV, "            if i >= 0:\n                self.flagAt.emit(i)",
      "            if i >= 0:\n                self.revealAt.emit(i)", TU),
@@ -98,4 +99,35 @@ MUTANTS += [
     ("charts: время победы и у поражения", W, "        if won:\n            game[\"win_time\"]", "        if True:\n            game[\"win_time\"]", TSC),
     ("charts: рекорд - худшее время", W, 'gamelog.best_curve(mine, "win_time", "min")', 'gamelog.best_curve(mine, "win_time", "max")', TSC),
     ("charts: время по всем полям сразу", W, '    mine = [g for g in games if g["level"] == field]', '    mine = games', TSC + " -k field_from"),
+]
+
+# стартовое меню и растянутые настройки (автор 17.10)
+MN = "game/ui/menu.py"
+TM = "tests/test_menu.py"
+MUTANTS += [
+    ("menu: окно открывается полем", W, '        self.pages = {"menu": self.menu, "play": self.play,',
+     '        self.pages = {"play": self.play, "menu": self.menu,', TM + " -k opens"),
+    ("menu: ИИ начинает за меню", W, "            if self.mode == \"ai\" and not self.paused and on_screen:",
+     "            if self.mode == \"ai\" and not self.paused:", TM + " -k behind"),
+    ("menu: ИИ доигрывает за меню", W, "            self.token += 1                 # поле ушло с экрана",
+     "            return                 # поле ушло с экрана", TM + " -k behind"),
+    ("menu: нет «Продолжить»", W, '        return self.game is not None and self.game.status == "playing"',
+     "        return False", TM + " -k continue"),
+    ("menu: назад всегда на поле", W, "            self.back_page = prev           # «Назад»",
+     '            self.back_page = "play"           # «Назад»', TM + " -k back"),
+    ("menu: выбор уводит из меню", W, '            self.new_game(show=self.current_page() == "play")',
+     "            self.new_game()", TM + " -k stays"),
+    ("menu: настройки узкой колонкой", W, "        self.box = box\n", "        self.box = box\n        box.setMaximumWidth(760)\n",
+     TM + " -k stretches"),
+    ("menu: панель шире окна", MN, "        self.panel.setFixedWidth(round(min(470 * self.scale, max(440, self.width() * 0.46))))",
+     "        self.panel.setFixedWidth(round(470 * self.scale * 1.3))", TM + " -k whole"),
+    ("menu: не растёт на 4K", MN, "        return round(max(1.0, min(2.4, w / 1280, h / 800)), 2)", "        return 1.0", TM + " -k scales"),
+    ("menu: волна не успевает", MN, "    wave = min(WAVE, 10.0 / max(1.0, far))", "    wave = WAVE", TM + " -k fade"),
+    ("menu: цифры не по порядку", MN, "                n += 1\n                b.digit = n", "                n += 1", TM + " -k continue"),
+    ("menu: боковая панель общего вида", W, "        self.play.side.setStyleSheet(side_qss(menu_palette(self.ctx.theme)))",
+     "        pass", TM + " -k side_panel"),
+    ("menu: поле не в цветах меню", W, "        self.play.board.set_theme(self.ctx.theme, menu_palette(self.ctx.theme))",
+     "        self.play.board.set_theme(self.ctx.theme)", TM + " -k side_panel"),
+    ("menu: картинка не собирается заново", MN, "            self._key = None                         # время пошло назад",
+     "            pass                         # время пошло назад", TM + " -k frozen"),
 ]

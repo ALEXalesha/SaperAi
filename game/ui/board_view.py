@@ -41,6 +41,7 @@ class BoardView(QWidget):
         self.hint = -1             # клетка подсказки
         self.last = -1             # последняя клетка, открытая ИИ
         self.theme_name = "dark"
+        self.field = None          # цвета клеток из меню (game.ui.menu.PALETTES) или None
         self.pressed = -1
         self.buttons = Qt.MouseButton.NoButton
         self.chording = False
@@ -49,8 +50,9 @@ class BoardView(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMinimumSize(300, 200)
 
-    def set_theme(self, name):
+    def set_theme(self, name, field=None):
         self.theme_name = name
+        self.field = field
         self.update()
 
     def set_board(self, width, height, cells, probs=None, hint=-1, last=-1):
@@ -135,7 +137,9 @@ class BoardView(QWidget):
         pal = theme.palette(self.theme_name)
         s = self.cell_size()
         ox, oy = self.origin()
-        p.fillRect(QRectF(ox - 2, oy - 2, s * self.width_ + 4, s * self.height_ + 4), QColor(pal["border"]))
+        f = self.field
+        p.fillRect(QRectF(ox - 2, oy - 2, s * self.width_ + 4, s * self.height_ + 4),
+                   QColor(f["line"] if f else pal["border"]))
         font = QFont("Segoe UI")
         font.setBold(True)
         font.setPixelSize(max(7, int(s * 0.58)))
@@ -146,7 +150,12 @@ class BoardView(QWidget):
         # закрытая клетка заметно отличается от открытой в обеих темах
         hidden_c = QColor(pal["surface2"]) if self.theme_name == "dark" else QColor("#c3cddd")
         hidden_hi = QColor(pal["sq_dark"]) if self.theme_name == "dark" else QColor("#e9eef6")
+        hidden_lo = None
         open_c = QColor(pal["surface"])
+        if f:                      # поле в цветах «полевой карты» меню: выпуклые клетки с фаской
+            nums = list(f["digits"])
+            hidden_c, hidden_hi, hidden_lo = QColor(f["closed"]), QColor(f["hi"]), QColor(f["lo"])
+            open_c = QColor(f["open"])
         neighbours = self._press_area()
         for i, v in enumerate(self.cells):
             r = self.cell_rect(i).adjusted(0.5, 0.5, -0.5, -0.5)
@@ -165,6 +174,10 @@ class BoardView(QWidget):
                 p.setPen(QPen(hidden_hi, max(1.0, s * 0.06)))
                 p.drawLine(r.topLeft() + QPointF(1, 1), r.topRight() + QPointF(-1, 1))
                 p.drawLine(r.topLeft() + QPointF(1, 1), r.bottomLeft() + QPointF(1, -1))
+                if hidden_lo is not None:
+                    p.setPen(QPen(hidden_lo, max(1.0, s * 0.06)))
+                    p.drawLine(r.bottomLeft() + QPointF(1, -1), r.bottomRight() + QPointF(-1, -1))
+                    p.drawLine(r.topRight() + QPointF(-1, 1), r.bottomRight() + QPointF(-1, -1))
             if self.probs is not None and self.probs[i] is not None and v in (HIDDEN, FLAG):
                 c = mine_color(self.probs[i], self.theme_name)
                 c.setAlpha(205)

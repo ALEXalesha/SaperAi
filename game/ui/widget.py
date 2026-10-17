@@ -25,6 +25,8 @@ from game.core.board import LEVELS, MAX_SIDE, Game, check_size
 from game.ui.ai_thread import AiController
 from game.ui.board_view import BoardView
 from game.ui.i18n import translator
+from game.ui.menu import MenuPage, page_qss, side_qss
+from game.ui.menu import palette as menu_palette
 from game.version import VERSION
 
 PRESETS = ("beginner", "intermediate", "expert", "custom")
@@ -99,7 +101,9 @@ class PlayPage(QWidget):
         outer = QVBoxLayout(side)
         outer.setContentsMargins(0, 0, 0, 0)
         body = QWidget()
+        self.body = body
         scroll = scroll_page(body)
+        self.scroll = scroll
         scroll.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; }")
         outer.addWidget(scroll)
         col = QVBoxLayout(body)
@@ -181,6 +185,8 @@ class PlayPage(QWidget):
         self.assisted_note = label("", "hint", wrap=True)
         col.addWidget(self.assisted_note)
         col.addStretch(1)
+        self.menu_button = button("", None, lambda: gw.show_page("menu"))
+        col.addWidget(self.menu_button)
         last = QHBoxLayout()
         self.stats_button = button("", None, lambda: gw.show_page("stats"))
         self.settings_button = button("", None, lambda: gw.show_page("settings"))
@@ -255,6 +261,7 @@ class PlayPage(QWidget):
         self.assisted_note.setText(t("assisted"))
         self.stats_button.setText(t("stats"))
         self.settings_button.setText(t("settings"))
+        self.menu_button.setText(t("to_menu"))
         self.foot.setText(t("footer", v=VERSION))
         self.fit_labels()
 
@@ -307,7 +314,7 @@ class StatsPage(QWidget):
         self.heading = label("", "heading")
         top.addWidget(self.heading)
         top.addStretch(1)
-        self.back_button = button("", None, lambda: gw.show_page("play"))
+        self.back_button = button("", None, lambda: gw.go_back())
         top.addWidget(self.back_button)
         col.addLayout(top)
         mine = card()
@@ -466,16 +473,19 @@ class SettingsPage(QWidget):
         self.heading = label("", "heading")
         top.addWidget(self.heading)
         top.addStretch(1)
-        self.back_button = button("", None, lambda: gw.show_page("play"))
+        self.back_button = button("", None, lambda: gw.go_back())
         top.addWidget(self.back_button)
         outer.addLayout(top)
+        # карточка на всю ширину страницы, как карточки статистики (автор 17.10: настройки
+        # не должны стоять узкой колонкой у левого края); подписи - 3 части, поля - 2
         box = card()
-        box.setMaximumWidth(760)
+        self.box = box
         self.grid = QGridLayout(box)
         self.grid.setContentsMargins(22, 18, 22, 18)
         self.grid.setHorizontalSpacing(22)
         self.grid.setVerticalSpacing(16)
-        self.grid.setColumnStretch(0, 1)
+        self.grid.setColumnStretch(0, 3)
+        self.grid.setColumnStretch(1, 2)
         self.rows = {}
         self.theme_combo = Combo()
         for k in theme.THEMES:
@@ -577,15 +587,17 @@ class GameWidget(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.stack)
+        self.back_page = "menu"
+        self.menu = MenuPage(self)
         self.play = PlayPage(self)
         self.history = gamelog.GameLog(ctx.file("games.json"))
         self.stats = StatsPage(self)
         self.settings_page = SettingsPage(self)
-        self.pages = {"play": self.play, "stats": self.stats, "settings": self.settings_page}
+        self.pages = {"menu": self.menu, "play": self.play, "stats": self.stats, "settings": self.settings_page}
         for p in self.pages.values():
             self.stack.addWidget(p)
-        for keys, slot in (("Escape", lambda: self.show_page("play")), ("F2", self.new_game),
-                           ("N", self.new_game), ("H", self.on_hint),
+        for keys, slot in (("Escape", self.on_escape), ("F2", lambda: self.new_game()),
+                           ("N", lambda: self.new_game()), ("H", self.on_hint),
                            ("T", lambda: self.change("show_thoughts", not self.settings["show_thoughts"]))):
             sc = QShortcut(QKeySequence(keys), self)
             sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
@@ -593,7 +605,7 @@ class GameWidget(QWidget):
         ctx.changed.connect(self.on_ctx_changed)
         self.apply_theme()
         self.retranslate()
-        self.new_game()
+        self.new_game(show=False)           # меню - первая страница стопки: окно открывается им
 
     def minimumSizeHint(self):
         return QSize(900, 640)
@@ -605,11 +617,55 @@ class GameWidget(QWidget):
         return next(k for k, p in self.pages.items() if p is w)
 
     def show_page(self, name):
+        prev = self.current_page()
+        if name in ("stats", "settings") and prev in ("menu", "play"):
+            self.back_page = prev           # «Назад» и Esc - туда, откуда пришли
         self.stack.setCurrentWidget(self.pages[name])
         if name == "stats":
             self.stats.refresh()
         elif name == "settings":
             self.settings_page.sync()
+        elif name == "menu":
+            self.refresh_menu()
+        if name == "play" and prev != "play":
+            self.after_change(moved=False)  # ИИ и «Мысли ИИ» - снова, раз поле на экране
+        elif name != "play" and prev == "play":
+            self.token += 1                 # поле ушло с экрана: ИИ не играет за меню
+            self.step_timer.stop()
+            self.ai.cancel()
+
+    def go_back(self):
+        self.show_page(self.back_page)
+
+    def on_escape(self):
+        page = self.current_page()
+        if page == "play":
+            self.show_page("menu")
+        elif page in ("stats", "settings"):
+            self.go_back()
+
+    def in_progress(self):
+        """Партия начата и не кончена - в меню «Продолжить» и «Новая игра»."""
+        return self.game is not None and self.game.status == "playing"
+
+    def menu_play(self):
+        if self.in_progress():
+            self.show_page("play")
+        else:
+            self.new_game()
+
+    def refresh_menu(self):
+        if not hasattr(self, "menu"):
+            return
+        t = self.t
+        w, h, m = self.size_now()
+        totals = self.ctx.stats.totals()
+        best = self.records().get(self.stats_key()) or []
+        name = t(self.settings["preset"])
+        foot = t("menu_foot", games=totals["games"], wins=totals["wins"])
+        foot += " · " + (t("menu_best", field=name, s=f"{best[0]:.1f}") if best else t("menu_no_best", field=name))
+        self.menu.set_info(t("menu_tag", w=w, h=h, m=m), foot, t("menu_version", v=VERSION))
+        self.menu.sync(self.settings, self.in_progress())
 
     def size_now(self):
         s = self.settings
@@ -644,10 +700,10 @@ class GameWidget(QWidget):
         self.settings.set(key, value)
         self.play.sync(self.settings)
         self.settings_page.sync()
-        if key in ("preset", "custom_w", "custom_h", "custom_m", "first_click", "no_guess"):
-            self.new_game()
-        elif key == "mode":
-            self.new_game()
+        if key in ("preset", "custom_w", "custom_h", "custom_m", "first_click", "no_guess", "mode"):
+            # новая партия, но страница та же: выбор поля в меню или правила в настройках не
+            # уводят на поле (раньше смена правила первого клика в настройках уводила)
+            self.new_game(show=self.current_page() == "play")
         elif key == "ai_level":
             self.probs = None
             self.after_change(moved=False)
@@ -668,13 +724,18 @@ class GameWidget(QWidget):
 
     def apply_theme(self):
         c = theme.palette(self.ctx.theme)
-        self.play.board.set_theme(self.ctx.theme)
+        self.menu.set_theme(self.ctx.theme)
+        # боковая панель и фон поля - в стиле меню (автор 17.10: и боковые панели у игр свои)
+        self.play.side.setStyleSheet(side_qss(menu_palette(self.ctx.theme)))
+        self.play.setStyleSheet(page_qss(menu_palette(self.ctx.theme)))
+        self.play.board.set_theme(self.ctx.theme, menu_palette(self.ctx.theme))
         self.stats.charts.set_theme(self.ctx.theme)
         for combo in self.findChildren(Combo):
             combo.set_arrow_color(c["text"])
         self.update()
 
     def retranslate(self):
+        self.menu.retranslate(self.in_progress())
         self.play.retranslate()
         self.settings_page.retranslate()
         if self.current_page() == "stats":
@@ -694,7 +755,7 @@ class GameWidget(QWidget):
 
     # --- партия ---
 
-    def new_game(self, seed=None):
+    def new_game(self, seed=None, show=True):
         s = self.settings
         w, h, m = self.size_now()
         check_size(w, h, m)
@@ -712,9 +773,11 @@ class GameWidget(QWidget):
         self.hint_cell = -1
         self.last_ai = -1
         self.message = ""
-        self.stack.setCurrentWidget(self.play)
+        if show:
+            self.stack.setCurrentWidget(self.play)
         self.play.sync(s)
         self.after_change()
+        self.refresh_menu()
 
     def human_can_move(self):
         return self.mode == "human" and self.game is not None and not self.game.over
@@ -764,9 +827,10 @@ class GameWidget(QWidget):
         else:
             if g.started is not None:
                 self.clock.start()
-            if self.settings["show_thoughts"]:
+            on_screen = self.current_page() == "play"
+            if self.settings["show_thoughts"] and on_screen:
                 self.ai.request_thoughts(self.token, g.observe(), self.settings["ai_level"])
-            if self.mode == "ai" and not self.paused:
+            if self.mode == "ai" and not self.paused and on_screen:
                 self.step_timer.start(self.settings["speed_ms"])
         self.refresh()
 

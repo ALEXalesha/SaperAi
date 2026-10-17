@@ -24,6 +24,7 @@ def win(app, tmp_path):
     w, ctx = make_window(GAME_INFO, create_widget, APP_NAME, root=str(tmp_path / "home"))
     w.resize(1280, 800)
     w.show()
+    w.game.show_page("play")          # окно открывается меню (tests/test_menu.py), здесь - поле
     w.game.change("speed_ms", 0)
     yield w
     w.game.shutdown()

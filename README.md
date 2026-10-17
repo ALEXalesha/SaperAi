@@ -24,6 +24,11 @@
 - **AI plays** with a speed slider and pause: it opens cells and flags certain mines.
 - **Hint:** a safe cell or, if there is none, the least risky cell and its risk in percent.
 - **AI thoughts:** a heat map over the board with the chance of a mine in every closed cell.
+- **A "field map" start menu:** in the background the AI clears a board with a wave, an
+  "AI thoughts" heat strip runs ahead of it; a square panel with tile buttons and Minesweeper
+  digits, board / who plays / AI level, "Continue" for a game in progress, totals and the board
+  record. The side panel and the board use the same colours. The menu grows with the window up to 4K.
+- **Settings span the whole window**, like the statistics.
 - Paint themes (dark and light), Russian and English, the window reopens where it was closed.
 
 Games with a hint or AI thoughts do not count for statistics and records.
@@ -76,13 +81,20 @@ The real number: **49.0 %** with "opens an area" and **38.6 %** with
 
 ## Tests
 
-232 tests (pytest); the window is tested offscreen only, with synthesized mouse events.
+258 tests (pytest); the window is tested offscreen only, with synthesized mouse events.
 
 - **Exactness law:** on small boards the solver's probabilities equal a full enumeration of all layouts.
 - **Honesty law:** two different mine layouts with the same visible board lead to the same AI decision.
 - Rules: hand-made boards per rule and random games with invariants.
-- **Mutation testing** `tools/mutate.py`: 47 deliberate breakages, all caught.
+- **Menu laws** (`tests/test_menu.py`): the menu and the side panel are whole (nothing past the
+  edge, text fits, no overlaps) from the smallest window to 4K, in both themes and languages;
+  settings take nearly the full width; the AI does not play behind the menu.
+- **Mutation testing** `tools/mutate.py`: 65 deliberate breakages, all caught.
 - Passport: the first games of each check are replayed with the same seeds.
+
+## Download
+
+Windows builds (installer and portable archive) are in [Releases](../../releases). The builds are not code-signed, so SmartScreen may warn on first start.
 
 ## Running and building
 

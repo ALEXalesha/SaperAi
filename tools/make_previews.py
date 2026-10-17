@@ -66,6 +66,12 @@ def main(out):
     for theme_name in ("dark", "light"):
         ctx.set_theme(theme_name)
         suffix = "" if theme_name == "dark" else "_light"
+        # стартовое меню: поле на фоне разминировано примерно наполовину
+        gw.show_page("menu")
+        gw.menu.set_time(7.0)
+        pump(app, limit=0.3)
+        shots.append((f"preview_menu{suffix}.png", window.grab()))
+        gw.menu.set_time(None)
         # профи: ИИ сыграл часть поля, «Мысли ИИ» поверх
         gw.change("preset", "expert")
         gw.change("ai_level", "strong")
@@ -105,7 +111,7 @@ def main(out):
     for name, pix in shots:
         pix.save(os.path.join(out, name))
         print(name, pix.width(), pix.height())
-    first = shots[0][1]
+    first = dict(shots)["preview_expert.png"]     # карточка в Игротеке - партия, не меню
     first.save(os.path.join(out, "preview.png"))
     gw.shutdown()
     window.close()

@@ -58,6 +58,15 @@ RU = {
     "seconds": "{n} с", "minutes": "{n} мин", "hours": "{n} ч",
     "footer": "SaperAi {v} · ЛКМ - открыть, ПКМ - флажок, средняя или обе - аккорд",
     "error": "Ошибка ИИ: {e}",
+    "menu_title": "САПЁР", "menu_play": "Играть", "menu_continue": "Продолжить", "to_menu": "В меню",
+    "menu_sub": "Классический сапёр и ИИ, который считает точную вероятность мины в каждой клетке. "
+                "Играйте сами, просите подсказку или смотрите, как ИИ разминирует поле: "
+                "«Мысли ИИ» покажут его расчёт.",
+    "menu_field": "ПОЛЕ", "menu_who": "КТО", "menu_ai": "ИИ",
+    "menu_tag": "ПОЛЕ {w}×{h} · МИН {m}",
+    "menu_foot": "партий {games} · побед {wins}",
+    "menu_best": "рекорд «{field}» {s} с", "menu_no_best": "рекорда «{field}» пока нет",
+    "menu_version": "SaperAi {v} · Esc - меню",
 }
 
 EN = {
@@ -117,6 +126,15 @@ EN = {
     "seconds": "{n} s", "minutes": "{n} min", "hours": "{n} h",
     "footer": "SaperAi {v} · left - open, right - flag, middle or both - chord",
     "error": "AI error: {e}",
+    "menu_title": "MINESWEEPER", "menu_play": "Play", "menu_continue": "Continue", "to_menu": "Menu",
+    "menu_sub": "Classic Minesweeper and an AI that counts the exact chance of a mine in every cell. "
+                "Play yourself, ask for a hint or watch the AI clear the board: "
+                "\"AI thoughts\" show its numbers.",
+    "menu_field": "BOARD", "menu_who": "WHO", "menu_ai": "AI",
+    "menu_tag": "BOARD {w}×{h} · MINES {m}",
+    "menu_foot": "games {games} · wins {wins}",
+    "menu_best": "\"{field}\" record {s} s", "menu_no_best": "no \"{field}\" record yet",
+    "menu_version": "SaperAi {v} · Esc - menu",
 }
 
 

@@ -57,6 +57,14 @@ def selftest(out_path):
         window, ctx = make_window(GAME_INFO, create_widget, APP_NAME, root=home)
         window.show()
         gw = window.game
+        app.processEvents()
+        from aikit.menu import layout_problems
+        if gw.current_page() != "menu":
+            raise RuntimeError("окно открылось не меню")
+        bad = layout_problems(gw.menu)
+        if bad:
+            raise RuntimeError("меню обрезано: " + "; ".join(bad[:3]))
+        lines.append("меню: открыто первым, раскладка цела")
         gw.change("speed_ms", 0)
         gw.change("mode", "ai")
         gw.change("ai_level", "strong")
