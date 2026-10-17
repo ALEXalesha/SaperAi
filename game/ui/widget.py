@@ -9,9 +9,9 @@ ctx и меняются на лету по ctx.changed. Файлы - тольк�
 import gc
 import random
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QFrame, QGridLayout, QHBoxLayout, QHeaderView,
+from PySide6.QtWidgets import (QAbstractItemView, QAbstractSpinBox, QCheckBox, QFrame, QGridLayout, QHBoxLayout, QHeaderView,
                                QLabel, QScrollArea, QSlider, QSpinBox, QStackedWidget, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
@@ -25,8 +25,10 @@ from game.core.board import LEVELS, MAX_SIDE, Game, check_size
 from game.ui.ai_thread import AiController
 from game.ui.board_view import BoardView
 from game.ui.i18n import translator
+from aikit.skin import SettingsList, SkinPage, StatTiles
 from game.ui.menu import MenuPage, page_qss, side_qss
 from game.ui.menu import palette as menu_palette
+from game.ui.skin import SKIN, lcd_qss
 from game.version import VERSION
 
 PRESETS = ("beginner", "intermediate", "expert", "custom")
@@ -102,6 +104,7 @@ class PlayPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         body = QWidget()
         self.body = body
+        body.installEventFilter(self)        # ширина тела панели сменилась - подписи заново
         scroll = scroll_page(body)
         self.scroll = scroll
         scroll.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; }")
@@ -148,6 +151,8 @@ class PlayPage(QWidget):
             cap = label("", "hint")
             sp = QSpinBox()
             sp.setRange(lo, hi)
+            # стрелки Fusion в таблице стилей игры - пустые полоски (проверка 17.10): ввод и колесо
+            sp.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
             sp.valueChanged.connect(lambda v, k=key: gw.change(k, int(v)))
             cg.addWidget(cap, 0, c)
             cg.addWidget(sp, 1, c)
@@ -184,7 +189,13 @@ class PlayPage(QWidget):
         col.addWidget(self.thoughts_source)
         self.assisted_note = label("", "hint", wrap=True)
         col.addWidget(self.assisted_note)
+        # итоги этого поля - на месте пустоты между выбором и кнопками (автор 17.10: боковые
+        # панели по уровню проработки как в AiBoy/AiCar)
         col.addStretch(1)
+        self.field_caption = label("", "muted", wrap=True)
+        col.addWidget(self.field_caption)
+        self.field_stats = label("", "fieldStats", wrap=True)
+        col.addWidget(self.field_stats)
         self.menu_button = button("", None, lambda: gw.show_page("menu"))
         col.addWidget(self.menu_button)
         last = QHBoxLayout()
@@ -204,10 +215,27 @@ class PlayPage(QWidget):
         for w in self.side.findChildren(QLabel):
             if w.wordWrap() and w.width() > 0:
                 w.setMinimumHeight(w.heightForWidth(w.width()))
+        # тело панели - сразу по новой наименьшей высоте, не ждать отложенной раскладки прокрутки:
+        # иначе между сменой текста (ответ ИИ, итоги поля) и следующим кадром соседей сжимало
+        # (табло мин 22 px при шрифте 26 px, закон test_side_panel_in_menu_style_and_whole)
+        lay = self.body.layout()
+        if lay is not None and self.scroll.viewport().width() > 0:
+            lay.activate()
+            need = self.body.minimumSizeHint().height()
+            if self.body.height() < need:
+                self.body.resize(self.body.width(), need)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.fit_labels()
+
+    def eventFilter(self, obj, event):
+        # тело панели в прокрутке меняет ширину уже после resizeEvent страницы (появилась или
+        # ушла полоса прокрутки): высоты подписей с переносом - по новой ширине, иначе соседей
+        # сжимало (табло мин 22 px при шрифте 26 px в окне 900x700 после 4K)
+        if obj is self.body and event.type() == QEvent.Type.Resize:
+            self.fit_labels()
+        return False
 
     def sync(self, s):
         self.preset.blockSignals(True)
@@ -299,24 +327,16 @@ def item(text, align=Qt.AlignmentFlag.AlignCenter):
 CHART_LEVELS = ("beginner", "intermediate", "expert", "custom")
 
 
-class StatsPage(QWidget):
+class StatsPage(SkinPage):
+    """Статистика в стиле «полевой карты» (aikit.skin, game/ui/skin.py): фон - неподвижное минное
+    поле, плитки с крупными числами, карточки и графики - выпуклые клетки с фаской."""
+
     def __init__(self, gw):
-        super().__init__()
+        super().__init__(SKIN, back=lambda: gw.go_back())
         self.gw = gw
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        body = page_widget()
-        outer.addWidget(scroll_page(body))
-        col = QVBoxLayout(body)
-        col.setContentsMargins(26, 22, 26, 22)
-        col.setSpacing(14)
-        top = QHBoxLayout()
-        self.heading = label("", "heading")
-        top.addWidget(self.heading)
-        top.addStretch(1)
-        self.back_button = button("", None, lambda: gw.go_back())
-        top.addWidget(self.back_button)
-        col.addLayout(top)
+        col = self.col
+        self.tiles = StatTiles(4, min_tile=170)
+        col.addWidget(self.tiles)
         mine = card()
         mc = QVBoxLayout(mine)
         mc.setContentsMargins(18, 14, 18, 14)
@@ -324,6 +344,8 @@ class StatsPage(QWidget):
         mc.addWidget(self.mine_title)
         self.table = table_widget(6)
         mc.addWidget(self.table)
+        self.empty_note = label("", "muted", wrap=True)
+        mc.addWidget(self.empty_note)
         col.addWidget(mine)
         # графики (правило автора 10.10 - графики в статистике всех игр с ИИ): доля побед,
         # итоги по полям, время партии, время победы с рекордом, сила ИИ по паспорту
@@ -349,10 +371,27 @@ class StatsPage(QWidget):
         col.addWidget(pc)
         col.addStretch(1)
 
+    def refresh_tiles(self):
+        t = self.gw.t
+        stats = self.gw.ctx.stats
+        games = sum(e["games"] for e in stats.data.values())
+        wins = sum(e["wins"] for e in stats.data.values())
+        streak = max((e["best_streak"] for e in stats.data.values()), default=0)
+        best = self.gw.records().get(self.gw.stats_key()) or []
+        field = t(self.gw.settings["preset"])
+        self.tiles.set_tile(0, games, t("tile_games"), t("tile_games_note"))
+        self.tiles.set_tile(1, wins, t("tile_wins"), t("tile_rate", p=round(100 * wins / games)) if games else "")
+        self.tiles.set_tile(2, f"{best[0]:.1f}{t('unit_s')}" if best else "-", t("tile_record", field=field),
+                            "" if best else t("tile_record_none"))
+        self.tiles.set_tile(3, streak, t("tile_streak"))
+        w, h, m = self.gw.size_now()
+        self.set_tag(t("menu_tag", w=w, h=h, m=m))
+
     def refresh(self):
         t = self.gw.t
         self.heading.setText(t("stats_title"))
         self.back_button.setText(t("back"))
+        self.refresh_tiles()
         self.mine_title.setText(t("your_games"))
         self.table.setHorizontalHeaderLabels([t(k) for k in ("col_level", "col_games", "col_wins", "col_rate",
                                                                "col_best", "col_streak")])
@@ -370,6 +409,9 @@ class StatsPage(QWidget):
             self.table.setItem(r, 4, item(f"{best[0]:.1f}" if best else "-"))
             self.table.setItem(r, 5, item(str(e["best_streak"])))
         fit_height(self.table)
+        self.table.setVisible(bool(rows))
+        self.empty_note.setText(t("no_games_yet"))
+        self.empty_note.setVisible(not rows)
         self.refresh_charts()
         self.pass_title.setText(t("passport"))
         try:
@@ -458,35 +500,17 @@ def _refresh_charts(page):
 # --- настройки ---
 
 
-class SettingsPage(QWidget):
+class SettingsPage(SkinPage):
+    """Настройки в стиле «полевой карты»: плашки-клетки с фаской на всю ширину (как статистика;
+    автор 17.10: не узкой колонкой у левого края), две группы - вид и звук, поле."""
+
     def __init__(self, gw):
-        super().__init__()
+        super().__init__(SKIN, back=lambda: gw.go_back())
         self.gw = gw
-        outer0 = QVBoxLayout(self)
-        outer0.setContentsMargins(0, 0, 0, 0)
-        body = page_widget()
-        outer0.addWidget(scroll_page(body))
-        outer = QVBoxLayout(body)
-        outer.setContentsMargins(26, 22, 26, 22)
-        outer.setSpacing(14)
-        top = QHBoxLayout()
-        self.heading = label("", "heading")
-        top.addWidget(self.heading)
-        top.addStretch(1)
-        self.back_button = button("", None, lambda: gw.go_back())
-        top.addWidget(self.back_button)
-        outer.addLayout(top)
-        # карточка на всю ширину страницы, как карточки статистики (автор 17.10: настройки
-        # не должны стоять узкой колонкой у левого края); подписи - 3 части, поля - 2
-        box = card()
+        box = SettingsList()
         self.box = box
-        self.grid = QGridLayout(box)
-        self.grid.setContentsMargins(22, 18, 22, 18)
-        self.grid.setHorizontalSpacing(22)
-        self.grid.setVerticalSpacing(16)
-        self.grid.setColumnStretch(0, 3)
-        self.grid.setColumnStretch(1, 2)
-        self.rows = {}
+        self.rows = box.rows
+        box.group("")
         self.theme_combo = Combo()
         for k in theme.THEMES:
             self.theme_combo.addItem("", k)
@@ -502,6 +526,7 @@ class SettingsPage(QWidget):
         self.volume.setValue(gw.ctx.sound.volume)
         self.volume.valueChanged.connect(gw.ctx.set_volume)
         self._row("volume", self.volume)
+        box.group("")
         self.first_combo = Combo()
         self.first_combo.addItem("", "opening")
         self.first_combo.addItem("", "safe")
@@ -510,27 +535,21 @@ class SettingsPage(QWidget):
         self.no_guess_box = QCheckBox("")
         self.no_guess_box.toggled.connect(lambda on: gw.change("no_guess", on))
         self._row("no_guess", self.no_guess_box)
-        outer.addWidget(box)
+        self.col.addWidget(box)
         self.note = label("", "hint")
-        outer.addWidget(self.note)
-        outer.addStretch(1)
+        self.col.addWidget(self.note)
+        self.col.addStretch(1)
 
     def _row(self, key, widget):
-        r = len(self.rows)
-        names = QVBoxLayout()
-        names.setSpacing(2)
-        title = label("", "section")
-        hint = label("", "hint", wrap=True)
-        names.addWidget(title)
-        names.addWidget(hint)
-        self.grid.addLayout(names, r, 0)
-        self.grid.addWidget(widget, r, 1)
-        self.rows[key] = (title, hint)
+        self.box.add(key, widget)
 
     def retranslate(self):
         t = self.gw.t
         self.heading.setText(t("settings_title"))
         self.back_button.setText(t("back"))
+        self.set_tag(t("settings_tag"))
+        self.box.set_group(0, t("group_view"))
+        self.box.set_group(1, t("group_field"))
         for key, (title, hint) in self.rows.items():
             title.setText(t(key))
             hint.setText(t(key + "_hint"))
@@ -575,6 +594,7 @@ class GameWidget(QWidget):
         self.hint_cell = -1
         self.last_ai = -1
         self.message = ""
+        self.layout_pending = None       # (партия, клетка, кто) - раскладка без угадываний считается
         self.ai = AiController(self)
         self.ai.ready.connect(self.on_ai)
         self.step_timer = QTimer(self)
@@ -596,9 +616,12 @@ class GameWidget(QWidget):
         self.pages = {"menu": self.menu, "play": self.play, "stats": self.stats, "settings": self.settings_page}
         for p in self.pages.values():
             self.stack.addWidget(p)
-        for keys, slot in (("Escape", self.on_escape), ("F2", lambda: self.new_game()),
-                           ("N", lambda: self.new_game()), ("H", self.on_hint),
-                           ("T", lambda: self.change("show_thoughts", not self.settings["show_thoughts"]))):
+        # клавиши партии - только на поле (проверка 17.10: H в меню молча помечала партию «с
+        # подсказкой», N в статистике бросала начатую партию, T в настройках включала «Мысли ИИ»);
+        # Esc - везде
+        for keys, slot in (("Escape", self.on_escape), ("F2", self._on_field(lambda: self.new_game())),
+                           ("N", self._on_field(lambda: self.new_game())), ("H", self._on_field(self.on_hint)),
+                           ("T", self._on_field(lambda: self.change("show_thoughts", not self.settings["show_thoughts"])))):
             sc = QShortcut(QKeySequence(keys), self)
             sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             sc.activated.connect(slot)
@@ -628,14 +651,41 @@ class GameWidget(QWidget):
         elif name == "menu":
             self.refresh_menu()
         if name == "play" and prev != "play":
+            if self.game is not None:
+                self.game.resume()          # часы партии снова идут
             self.after_change(moved=False)  # ИИ и «Мысли ИИ» - снова, раз поле на экране
         elif name != "play" and prev == "play":
             self.token += 1                 # поле ушло с экрана: ИИ не играет за меню
             self.step_timer.stop()
             self.ai.cancel()
+            if self.game is not None:
+                self.game.pause()           # и часы стоят
 
     def go_back(self):
         self.show_page(self.back_page)
+
+    def _on_field(self, slot):
+        """Клавиша партии работает, только пока на экране поле."""
+        def run():
+            if self.current_page() == "play":
+                slot()
+        return run
+
+    def pause(self):
+        """Вкладку оболочки скрыли: часы партии, ИИ и живой фон меню стоят."""
+        if self.game is not None:
+            self.game.pause()
+        self.menu.pause()
+        self.token += 1
+        self.step_timer.stop()
+        self.clock.stop()
+        self.ai.cancel()
+
+    def resume(self):
+        self.menu.resume()
+        if self.current_page() == "play" and self.game is not None:
+            self.game.resume()
+            self.after_change(moved=False)
 
     def on_escape(self):
         page = self.current_page()
@@ -666,6 +716,19 @@ class GameWidget(QWidget):
         foot += " · " + (t("menu_best", field=name, s=f"{best[0]:.1f}") if best else t("menu_no_best", field=name))
         self.menu.set_info(t("menu_tag", w=w, h=h, m=m), foot, t("menu_version", v=VERSION))
         self.menu.sync(self.settings, self.in_progress())
+        self.refresh_side()
+
+    def refresh_side(self):
+        """Итоги поля из настроек на боковой панели: партии, победы, рекорд (без подсказок)."""
+        t = self.t
+        key = self.stats_key()
+        e = self.ctx.stats.entry(key)
+        best = self.records().get(key) or []
+        self.play.field_caption.setText(t("side_field", field=self.key_title(key)))
+        lines = [t("side_games", games=e["games"], wins=e["wins"]),
+                 t("side_best", s=f"{best[0]:.1f}") if best else t("side_no_best")]
+        self.play.field_stats.setText("\n".join(lines))
+        self.play.fit_labels()          # текст сменился - высота подписи по ширине заново
 
     def size_now(self):
         s = self.settings
@@ -726,12 +789,14 @@ class GameWidget(QWidget):
         c = theme.palette(self.ctx.theme)
         self.menu.set_theme(self.ctx.theme)
         # боковая панель и фон поля - в стиле меню (автор 17.10: и боковые панели у игр свои)
-        self.play.side.setStyleSheet(side_qss(menu_palette(self.ctx.theme)))
+        self.play.side.setStyleSheet(side_qss(menu_palette(self.ctx.theme)) + lcd_qss(self.ctx.theme))
         self.play.setStyleSheet(page_qss(menu_palette(self.ctx.theme)))
         self.play.board.set_theme(self.ctx.theme, menu_palette(self.ctx.theme))
-        self.stats.charts.set_theme(self.ctx.theme)
         for combo in self.findChildren(Combo):
             combo.set_arrow_color(c["text"])
+        # настройки и статистика - в стиле «полевой карты» (aikit.skin; автор 17.10)
+        self.stats.set_theme(self.ctx.theme)
+        self.settings_page.set_theme(self.ctx.theme)
         self.update()
 
     def retranslate(self):
@@ -773,6 +838,7 @@ class GameWidget(QWidget):
         self.hint_cell = -1
         self.last_ai = -1
         self.message = ""
+        self.layout_pending = None
         if show:
             self.stack.setCurrentWidget(self.play)
         self.play.sync(s)
@@ -782,8 +848,36 @@ class GameWidget(QWidget):
     def human_can_move(self):
         return self.mode == "human" and self.game is not None and not self.game.over
 
+    def needs_layout(self):
+        g = self.game
+        return g is not None and g.status == "ready" and g.no_guess
+
+    def start_layout(self, i, who):
+        """Первый клик на поле без угадываний: раскладка - в потоке, окно отвечает."""
+        self.layout_pending = (self.game, i, who)
+        self.message = self.t("no_guess_wait")
+        self.ai.request_layout(self.token, self.game, i)
+        self.refresh()
+
+    def on_layout(self, payload):
+        pending = self.layout_pending
+        if pending is None or payload["game"] is not self.game or pending[0] is not self.game:
+            return                          # партия сменилась - раскладка не нужна
+        self.layout_pending = None
+        g, i, who = pending
+        g.set_layout(payload["mine"], payload["ok"])
+        self.message = ""
+        g.reveal(i)
+        if self.current_page() != "play":
+            g.pause()
+        self.ctx.sound.play("move")
+        self.after_change()
+
     def on_reveal(self, i):
-        if not self.human_can_move():
+        if not self.human_can_move() or self.layout_pending is not None:
+            return
+        if self.needs_layout():
+            self.start_layout(i, "human")
             return
         opened = self.game.reveal(i)
         if opened or self.game.over:
@@ -791,7 +885,7 @@ class GameWidget(QWidget):
             self.after_change()
 
     def on_flag(self, i):
-        if not self.human_can_move():
+        if not self.human_can_move() or self.layout_pending is not None:
             return
         if self.game.toggle_flag(i):
             self.ctx.sound.play("capture")
@@ -844,11 +938,18 @@ class GameWidget(QWidget):
 
     def _step(self):
         g = self.game
-        if g is None or g.over or self.mode != "ai":
+        if g is None or g.over or self.mode != "ai" or self.layout_pending is not None:
+            return
+        if self.needs_layout():
+            from game.ai.agents import first_cell
+            self.start_layout(first_cell(g.observe()), "ai")
             return
         self.ai.request_move(self.token, g.observe(), self.settings["ai_level"], self.rng.randrange(2 ** 31))
 
     def on_ai(self, token, kind, payload):
+        if kind == "layout" and isinstance(payload, dict):
+            self.on_layout(payload)         # свой номер не нужен: сверяется сама партия
+            return
         if token != self.token or self.game is None:
             return
         if isinstance(payload, Exception):
@@ -894,6 +995,11 @@ class GameWidget(QWidget):
         self.ctx.sound.play("win" if won else "loss")
         if self.mode != "human" or self.assisted:
             return
+        if won and g.moves == 1:
+            # всё поле открылось первым кликом (своё поле почти из одних мин) - это не игра:
+            # без рекорда 0,0 с и без победы в итогах (проверка 17.10)
+            self.message = self.t("first_click_win")
+            return
         key = self.stats_key()
         self.ctx.stats.record(key, "win" if won else "loss")
         game = {"level": self.settings["preset"], "outcome": "win" if won else "loss",
@@ -906,6 +1012,7 @@ class GameWidget(QWidget):
             best = sorted((recs.get(key) or []) + [round(g.elapsed(), 2)])[:RECORDS_KEEP]
             recs[key] = best
             save_json(self.ctx.file("records.json"), recs)
+        self.refresh_side()
 
     def records(self):
         data = load_json(self.ctx.file("records.json"))

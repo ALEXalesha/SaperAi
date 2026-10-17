@@ -17,8 +17,8 @@ MUTANTS = [
      "            if False:\n                self.status = \"lost\"", TB),
     ("rules: победа на одну клетку раньше", B, "if self.opened == self.n - self.mines:",
      "if self.opened >= self.n - self.mines - 1:", TB),
-    ("rules: таймер не стоит после конца", B, "end = self.finished if self.finished is not None else self.clock()",
-     "end = self.clock()", TB),
+    ("rules: таймер не стоит после конца", B, "end = self.finished if self.finished is not None else (",
+     "end = None if False else (", TB),
     ("rules: таймер с флажка", B, "        self.flag[i] ^= 1\n", "        self.flag[i] ^= 1\n        self.started = self.started or self.clock()\n", TB),
     ("rules: счётчик мин без флажков", B, "return self.mines - self.flags", "return self.mines", TB),
     ("rules: зерно не задаёт поле", B, "rng = random.Random(self.seed)", "rng = random.Random()", TB),
@@ -104,6 +104,7 @@ MUTANTS += [
 # стартовое меню и растянутые настройки (автор 17.10)
 MN = "game/ui/menu.py"
 TM = "tests/test_menu.py"
+TR = "tests/test_pages.py"
 MUTANTS += [
     ("menu: окно открывается полем", W, '        self.pages = {"menu": self.menu, "play": self.play,',
      '        self.pages = {"play": self.play, "menu": self.menu,', TM + " -k opens"),
@@ -124,10 +125,28 @@ MUTANTS += [
     ("menu: не растёт на 4K", MN, "        return round(max(1.0, min(2.4, w / 1280, h / 800)), 2)", "        return 1.0", TM + " -k scales"),
     ("menu: волна не успевает", MN, "    wave = min(WAVE, 10.0 / max(1.0, far))", "    wave = WAVE", TM + " -k fade"),
     ("menu: цифры не по порядку", MN, "                n += 1\n                b.digit = n", "                n += 1", TM + " -k continue"),
-    ("menu: боковая панель общего вида", W, "        self.play.side.setStyleSheet(side_qss(menu_palette(self.ctx.theme)))",
+    ("menu: боковая панель общего вида", W,
+     "        self.play.side.setStyleSheet(side_qss(menu_palette(self.ctx.theme)) + lcd_qss(self.ctx.theme))",
      "        pass", TM + " -k side_panel"),
     ("menu: поле не в цветах меню", W, "        self.play.board.set_theme(self.ctx.theme, menu_palette(self.ctx.theme))",
      "        self.play.board.set_theme(self.ctx.theme)", TM + " -k side_panel"),
     ("menu: картинка не собирается заново", MN, "            self._key = None                         # время пошло назад",
      "            pass                         # время пошло назад", TM + " -k frozen"),
+    # 17.10 вечер: настройки и статистика в стиле игры (aikit.skin) и находки проверки 17.10
+    ("pages: клавиши партии с чужих страниц", W, '            if self.current_page() == "play":\n                slot()',
+     "            slot()", TR + " -k hotkeys"),
+    ("pages: часы идут в меню", W, "                self.game.pause()           # и часы стоят", "                pass", TR + " -k clock"),
+    ("pages: раскладка в потоке окна", W, '        if self.needs_layout():\n            self.start_layout(i, "human")\n            return\n',
+     "", TR + " -k no_guess"),
+    ("pages: перебор без предела времени", B,
+     "                if (cancel is not None and cancel()) or time.monotonic() - start > budget:",
+     "                if cancel is not None and cancel():", TR + " -k budget"),
+    ("pages: победа первым кликом в рекордах", W, "        if won and g.moves == 1:", "        if False:", TR + " -k first_click"),
+    ("pages: пустая статистика молчит", W, "        self.empty_note.setVisible(not rows)", "        self.empty_note.setVisible(False)",
+     TR + " -k empty"),
+    ("pages: табло без окошка", W, " + lcd_qss(self.ctx.theme))", ")", TR + " -k lcd"),
+    ("pages: настройки общим видом", W,
+     "        super().__init__(SKIN, back=lambda: gw.go_back())\n        self.gw = gw\n        box = SettingsList()",
+     "        super().__init__(None, back=lambda: gw.go_back())\n        self.gw = gw\n        box = SettingsList()",
+     TR + " -k look"),
 ]

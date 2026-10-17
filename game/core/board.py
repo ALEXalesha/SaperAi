@@ -34,6 +34,8 @@ FIRST_CLICK = ("opening", "safe")
 _NEIGHBORS = {}
 
 
+NO_GUESS_SECONDS = 2.0     # предел перебора раскладок без угадываний
+
 def neighbors(width, height):
     """Соседи каждой клетки: список кортежей. Кэшируется по размеру поля."""
     key = (width, height)
@@ -94,6 +96,8 @@ class Game:
         self.exploded = -1
         self.started = None
         self.finished = None
+        self.paused_at = None            # партия на паузе (окно ушло с поля): часы стоят
+        self.paused_total = 0.0
         self.moves = 0                   # сколько раз игрок открывал клетки (клик или аккорд)
 
     @classmethod
@@ -123,21 +127,35 @@ class Game:
         return mine
 
     def place_mines(self, first, attempts=3000):
-        """Разложить мины после первого клика. Без угадываний - перебор раскладок, пока
-        решатель не пройдёт поле от first до конца; не вышло за attempts - последняя
-        раскладка, no_guess_ok=False (окно скажет)."""
-        rng = random.Random(self.seed)
+        """Разложить мины после первого клика. Без угадываний - no_guess_layout (окно зовёт её
+        в потоке, здесь - для проверок и ИИ без окна)."""
         if not self.no_guess:
-            self._set_mines(self._random_layout(rng, first))
+            self._set_mines(self._random_layout(random.Random(self.seed), first))
             return
+        mine, ok = self.no_guess_layout(first, attempts)
+        self.set_layout(mine, ok)
+
+    def no_guess_layout(self, first, attempts=3000, budget=NO_GUESS_SECONDS, cancel=None):
+        """Раскладка без угадываний: перебор, пока решатель не пройдёт поле от first до конца.
+        Предел - attempts раскладок и budget секунд (проверка 17.10: своё 60x60 с 1500 минами
+        вешало окно на 50 с); не вышло - (последняя раскладка, False), окно скажет. cancel() -
+        True: бросить перебор (окно закрывают)."""
         from game.ai.solver import solvable_without_guess
-        for _ in range(attempts):
-            mine = self._random_layout(rng, first)
+        rng = random.Random(self.seed)
+        start = time.monotonic()
+        mine = self._random_layout(rng, first)
+        for k in range(attempts):
+            if k:
+                if (cancel is not None and cancel()) or time.monotonic() - start > budget:
+                    break
+                mine = self._random_layout(rng, first)
             if solvable_without_guess(self.width, self.height, mine, first):
-                self.no_guess_ok = True
-                self._set_mines(mine)
-                return
-        self.no_guess_ok = False
+                return mine, True
+        return mine, False
+
+    def set_layout(self, mine, ok):
+        """Поставить готовую раскладку (из no_guess_layout)."""
+        self.no_guess_ok = bool(ok)
         self._set_mines(mine)
 
     # --- ходы ---
@@ -212,12 +230,24 @@ class Game:
         """Счётчик мин на табло: мины минус флажки (может уйти в минус - как в оригинале)."""
         return self.mines - self.flags
 
+    def pause(self):
+        """Часы стоят (человек ушёл с поля в меню, статистику, настройки - проверка 17.10: время
+        шло, и рекорд от этого хуже)."""
+        if self.started is not None and not self.over and self.paused_at is None:
+            self.paused_at = self.clock()
+
+    def resume(self):
+        if self.paused_at is not None:
+            self.paused_total += self.clock() - self.paused_at
+            self.paused_at = None
+
     def elapsed(self):
-        """Секунды с первого клика; после конца партии - замирают."""
+        """Секунды с первого клика без пауз; после конца партии - замирают."""
         if self.started is None:
             return 0.0
-        end = self.finished if self.finished is not None else self.clock()
-        return max(0.0, end - self.started)
+        end = self.finished if self.finished is not None else (
+            self.paused_at if self.paused_at is not None else self.clock())
+        return max(0.0, end - self.started - self.paused_total)
 
     def view(self):
         """То, что видит игрок: список длины width*height."""

@@ -79,6 +79,52 @@ def menu_board(cols, rows, cycle):
                                        for i in range(n)]}
 
 
+def field_tiles(c, theme_name):
+    """Клетки поля c×c: закрытая с фаской, открытые 0-8 с цифрой, флажок. Общие для живого фона
+    меню и неподвижного фона страниц настроек и статистики (game/ui/skin.py)."""
+    pal = palette(theme_name)
+    tiles = {}
+    closed = QPixmap(c, c)
+    closed.fill(QColor(pal["closed"]))
+    p = QPainter(closed)
+    b = max(2, c // 12)
+    p.fillRect(0, 0, c, b, QColor(pal["hi"]))
+    p.fillRect(0, 0, b, c, QColor(pal["hi"]))
+    p.fillRect(0, c - b, c, b, QColor(pal["lo"]))
+    p.fillRect(c - b, 0, b, c, QColor(pal["lo"]))
+    p.end()
+    tiles["closed"] = closed
+    font = QFont("Consolas")
+    font.setPixelSize(round(c * 0.58))
+    font.setWeight(QFont.Weight.Bold)
+    for k in range(0, 9):
+        t = QPixmap(c, c)
+        t.fill(QColor(pal["open"]))
+        p = QPainter(t)
+        p.setPen(QColor(pal["line"]))
+        p.drawRect(0, 0, c - 1, c - 1)
+        if k:
+            p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+            p.setFont(font)
+            p.setPen(QColor(pal["digits"][k - 1]))
+            p.drawText(QRectF(0, 0, c, c), int(Qt.AlignmentFlag.AlignCenter), str(k))
+        p.end()
+        tiles[k] = t
+    flag = QPixmap(closed)
+    p = QPainter(flag)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(QPen(QColor(pal["text"]), max(1.5, c * 0.06)))
+    p.drawLine(QPointF(c * 0.42, c * 0.22), QPointF(c * 0.42, c * 0.78))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(pal["flag"]))
+    p.drawPolygon([QPointF(c * 0.44, c * 0.22), QPointF(c * 0.78, c * 0.36), QPointF(c * 0.44, c * 0.5)])
+    p.setBrush(QColor(pal["text"]))
+    p.drawRect(QRectF(c * 0.28, c * 0.74, c * 0.3, c * 0.07))
+    p.end()
+    tiles["flag"] = flag
+    return tiles
+
+
 class MineField(Backdrop):
     """Фон: ИИ разминирует поле волной. Открытые клетки копятся в картинке (рисуются один раз),
     каждый кадр - только картинка, тепловая полоса перед волной и кольцо волны."""
@@ -118,47 +164,7 @@ class MineField(Backdrop):
         return QPointF((i % b["cols"]) * c - c // 3, (i // b["cols"]) * c - c // 4).toPoint()
 
     def _make_tiles(self, c):
-        pal = palette(self.theme_name)
-        tiles = {}
-        closed = QPixmap(c, c)
-        closed.fill(QColor(pal["closed"]))
-        p = QPainter(closed)
-        b = max(2, c // 12)
-        p.fillRect(0, 0, c, b, QColor(pal["hi"]))
-        p.fillRect(0, 0, b, c, QColor(pal["hi"]))
-        p.fillRect(0, c - b, c, b, QColor(pal["lo"]))
-        p.fillRect(c - b, 0, b, c, QColor(pal["lo"]))
-        p.end()
-        tiles["closed"] = closed
-        font = QFont("Consolas")
-        font.setPixelSize(round(c * 0.58))
-        font.setWeight(QFont.Weight.Bold)
-        for k in range(0, 9):
-            t = QPixmap(c, c)
-            t.fill(QColor(pal["open"]))
-            p = QPainter(t)
-            p.setPen(QColor(pal["line"]))
-            p.drawRect(0, 0, c - 1, c - 1)
-            if k:
-                p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-                p.setFont(font)
-                p.setPen(QColor(pal["digits"][k - 1]))
-                p.drawText(QRectF(0, 0, c, c), int(Qt.AlignmentFlag.AlignCenter), str(k))
-            p.end()
-            tiles[k] = t
-        flag = QPixmap(closed)
-        p = QPainter(flag)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(QPen(QColor(pal["text"]), max(1.5, c * 0.06)))
-        p.drawLine(QPointF(c * 0.42, c * 0.22), QPointF(c * 0.42, c * 0.78))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(pal["flag"]))
-        p.drawPolygon([QPointF(c * 0.44, c * 0.22), QPointF(c * 0.78, c * 0.36), QPointF(c * 0.44, c * 0.5)])
-        p.setBrush(QColor(pal["text"]))
-        p.drawRect(QRectF(c * 0.28, c * 0.74, c * 0.3, c * 0.07))
-        p.end()
-        tiles["flag"] = flag
-        return tiles
+        return field_tiles(c, self.theme_name)
 
     def paint_scene(self, p, w, h, t):
         cycle, local = divmod(t, PERIOD)

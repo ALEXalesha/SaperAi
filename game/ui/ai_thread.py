@@ -72,14 +72,28 @@ class AiController(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.jobs = []
+        self.layout_jobs = []        # раскладки без угадываний: их не отменяет ход человека
 
-    def _start(self, token, kind, fn):
-        self.jobs = [j for j in self.jobs if j.isRunning()]
+    def _start(self, token, kind, fn, stop=None, pool=None):
+        pool = self.jobs if pool is None else pool
+        pool[:] = [j for j in pool if j.isRunning()]
         job = _Job(token, kind, fn, self)
+        if stop is not None:
+            job.stop_event = stop
         job.done.connect(self.ready)
-        self.jobs.append(job)
+        pool.append(job)
         job.start()
         return job
+
+    def request_layout(self, token, game, first):
+        """Раскладка без угадываний в потоке (проверка 17.10: на большом плотном поле окно
+        висело 20-50 с). Ответ - {"game", "mine", "ok"}."""
+        stop = threading.Event()
+
+        def fn():
+            mine, ok = game.no_guess_layout(first, cancel=stop.is_set)
+            return {"game": game, "mine": mine, "ok": ok}
+        return self._start(token, "layout", fn, stop=stop, pool=self.layout_jobs)
 
     def request_move(self, token, obs, level, seed):
         agent = make_agent(level)
@@ -97,11 +111,14 @@ class AiController(QObject):
 
     def busy(self):
         self.jobs = [j for j in self.jobs if j.isRunning()]
-        return bool(self.jobs)
+        self.layout_jobs = [j for j in self.layout_jobs if j.isRunning()]
+        return bool(self.jobs or self.layout_jobs)
 
     def shutdown(self, timeout_ms=2000):
         self.cancel()
+        for j in self.layout_jobs:
+            j.stop_event.set()
         deadline = time.monotonic() + timeout_ms / 1000
-        for j in self.jobs:
+        for j in self.jobs + self.layout_jobs:
             j.wait(max(0, int((deadline - time.monotonic()) * 1000)))
         return not self.busy()

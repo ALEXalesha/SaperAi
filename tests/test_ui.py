@@ -253,6 +253,10 @@ def test_first_click_rule_and_no_guess_settings(app, win):
     gw.change("no_guess", True)
     gw.new_game(seed=13)
     gw.on_reveal(40)
+    end = time.time() + 5                    # раскладка без угадываний - в потоке (проверка 17.10)
+    while gw.layout_pending is not None and time.time() < end:
+        app.processEvents()
+        time.sleep(0.005)
     assert gw.game.no_guess_ok
     gw.change("no_guess", False)
     gw.change("first_click", "opening")

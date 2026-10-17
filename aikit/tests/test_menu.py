@@ -175,3 +175,16 @@ def test_checked_bold_button_needs_room_for_bold_text(qapp):
     qapp.processEvents()
     assert layout_problems(page) == []
     page.close()
+
+
+def test_multiline_label_measured_by_its_longest_line(qapp):
+    """Подпись в две строки («МАТЧИ\nПОБЕДЫ / ПОРАЖЕНИЯ») мерилась целиком одной строкой - ложная
+    обрезка; а если вторая строка не влезает по высоте - обрезка настоящая."""
+    from aikit.menu import text_clipped
+    lb = QLabel("МАТЧИ\nПОБЕДЫ / ПОРАЖЕНИЯ")
+    lb.resize(lb.sizeHint())
+    assert not text_clipped(lb)
+    lb.resize(lb.sizeHint().width(), lb.fontMetrics().height())      # вторая строка срезана
+    assert text_clipped(lb)
+    lb.resize(lb.sizeHint().width() - 20, lb.sizeHint().height())    # длинная строка не влезла
+    assert text_clipped(lb)
