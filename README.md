@@ -28,7 +28,7 @@
 
 Games with a hint or AI thoughts do not count for statistics and records.
 
-Statistics show charts (the shared `aikit.charts`): your share of wins (last 20 and all games), wins and explosions on each board, the time of each game, the time of each win with your record, and the AI strength from the passport as bars. With no games yet a chart says in words what will appear.
+Statistics show charts (the shared `aikit.charts`): your share of wins (last 20 and all games), wins and explosions on each board, the time of each game and of each win with your record on the board chosen in the settings (seconds on Beginner and Expert are not comparable), and the AI strength from the passport as bars. With no games yet a chart says in words what will appear.
 
 <img src="docs/preview_charts.png" width="880" alt="Statistics charts: share of wins, results by board, game time, win time and record, AI strength from the passport">
 
@@ -76,7 +76,7 @@ The real number: **49.0 %** with "opens an area" and **38.6 %** with
 
 ## Tests
 
-184 tests (pytest); the window is tested offscreen only, with synthesized mouse events.
+231 tests (pytest); the window is tested offscreen only, with synthesized mouse events.
 
 - **Exactness law:** on small boards the solver's probabilities equal a full enumeration of all layouts.
 - **Honesty law:** two different mine layouts with the same visible board lead to the same AI decision.

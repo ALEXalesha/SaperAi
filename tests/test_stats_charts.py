@@ -20,12 +20,13 @@ def labels_intact(app, win, gw):
         for lang in ("ru", "en"):
             win.ctx.set_theme(theme)
             win.ctx.set_lang(lang)
-            for width in (1400, win.minimumWidth()):
+            for width in (1400, 3840, win.minimumWidth()):
                 win.resize(width, 820)
                 app.processEvents()
                 for c in all_charts(gw.stats):
                     c.grab()
                     assert c.clipped == [], (theme, lang, width, c.title, c.clipped)
+                    assert c.overlaps() == [], (theme, lang, width, c.title, c.overlaps())
                     assert c.theme == theme
     win.ctx.set_theme("dark")
     win.ctx.set_lang("ru")
@@ -84,3 +85,33 @@ def test_win_time_record_is_the_lowest_time(app, win):
     gw.show_page("stats")
     best = [y for _, y in gw.stats.charts.records.second]
     assert [round(v) for v in best] == [50, 20, 20]
+
+
+def test_time_and_record_are_for_the_field_from_settings(app, win):
+    """Проверка графиков 17.10: время партии и рекорд времени шли по всем полям сразу - после
+    побед на «Новичке» за секунды рекорд на «Профи» показывал те же секунды. Теперь оба
+    графика - по полю из настроек, его имя в заголовке (в таблице «Ваши партии» лучшее время
+    тоже своё у каждого поля)."""
+    import json
+    gw = win.game
+    games = [{"n": 1, "level": "beginner", "outcome": "win", "seconds": 5.0, "win_time": 5.0},
+             {"n": 2, "level": "expert", "outcome": "win", "seconds": 120.0, "win_time": 120.0},
+             {"n": 3, "level": "beginner", "outcome": "loss", "seconds": 2.0},
+             {"n": 4, "level": "expert", "outcome": "loss", "seconds": 40.0},
+             {"n": 5, "level": "expert", "outcome": "win", "seconds": 100.0, "win_time": 100.0}]
+    with open(gw.ctx.file("games.json"), "w", encoding="utf-8") as f:
+        json.dump({"next": 6, "games": games}, f)
+    from aikit import gamelog
+    gw.history = gamelog.GameLog(gw.ctx.file("games.json"))
+    gw.change("preset", "expert")
+    gw.show_page("stats")
+    ch = gw.stats.charts
+    assert [y for _, y in ch.length.points] == [120.0, 40.0, 100.0]
+    assert [y for _, y in ch.records.points] == [120.0, 100.0]
+    assert [y for _, y in ch.records.second] == [120.0, 100.0]
+    assert gw.t("expert") in ch.length.title and gw.t("expert") in ch.records.title
+    gw.change("preset", "beginner")
+    gw.show_page("stats")
+    assert [y for _, y in ch.records.second] in ([5.0], [])
+    assert gw.t("beginner") in ch.records.title
+    labels_intact(app, win, gw)

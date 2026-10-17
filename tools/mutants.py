@@ -96,5 +96,6 @@ TSC = "tests/test_stats_charts.py"
 MUTANTS += [
     ("charts: партия не в журнале", W, "        self.history.record(game)", "        pass", TSC),
     ("charts: время победы и у поражения", W, "        if won:\n            game[\"win_time\"]", "        if True:\n            game[\"win_time\"]", TSC),
-    ("charts: рекорд - худшее время", W, 'score_key="win_time", score_better="min"', 'score_key="win_time", score_better="max"', TSC),
+    ("charts: рекорд - худшее время", W, 'gamelog.best_curve(mine, "win_time", "min")', 'gamelog.best_curve(mine, "win_time", "max")', TSC),
+    ("charts: время по всем полям сразу", W, '    mine = [g for g in games if g["level"] == field]', '    mine = games', TSC + " -k field_from"),
 ]

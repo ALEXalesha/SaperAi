@@ -148,6 +148,7 @@ def test_ai_plays_itself_and_is_not_recorded(app, win):
     gw.new_game(seed=6)
     assert wait(app, lambda: gw.game.over, 60)
     assert gw.ctx.stats.entry("beginner/opening")["games"] == 0
+    assert gw.history.games == []                   # и в журнал графиков показ не идёт
     assert gw.play.status.text() in (RU["status_ai_won"], RU["status_ai_lost"])
     gw.change("mode", "human")
 

@@ -429,15 +429,23 @@ def _refresh_charts(page):
     page.charts.length.unit = unit
     page.charts.records.unit = unit
     rule = page.gw.settings["first_click"]
-    page.charts.refresh(page.gw.history.games, page.gw.ctx.lang, {k: t(k) for k in CHART_LEVELS},
-                        labels={"share": t("ch_share"), "share_empty": t("ch_share_empty"),
-                                "levels": t("ch_levels"), "levels_empty": t("ch_levels_empty"),
-                                "length": t("ch_time"), "length_empty": t("ch_time_empty"),
-                                "length_y": t("ch_seconds"),
-                                "score": t("ch_win_time"), "score_empty": t("ch_win_time_empty"),
-                                "score_y": t("ch_seconds"), "points": t("ch_win"),
-                                "passport": t("ch_passport", rule=t("rule_" + rule))},
-                        passport=passport_bars(t, rule))
+    field = page.gw.settings["preset"]
+    games = page.gw.history.games
+    ch = page.charts
+    ch.refresh(games, page.gw.ctx.lang, {k: t(k) for k in CHART_LEVELS},
+               labels={"share": t("ch_share"), "share_empty": t("ch_share_empty"),
+                       "levels": t("ch_levels"), "levels_empty": t("ch_levels_empty"),
+                       "length": t("ch_time", field=t(field)), "length_empty": t("ch_time_empty"),
+                       "length_y": t("ch_seconds"),
+                       "score": t("ch_win_time", field=t(field)), "score_empty": t("ch_win_time_empty"),
+                       "score_y": t("ch_seconds"), "points": t("ch_win"),
+                       "passport": t("ch_passport", rule=t("rule_" + rule))},
+               passport=passport_bars(t, rule))
+    # время и рекорд - только по полю из настроек: секунды «Новичка» и «Профи» не сравнить,
+    # и рекорд по всем полям был бы рекордом самого лёгкого (как лучшее время в таблице)
+    mine = [g for g in games if g["level"] == field]
+    ch.length.set_points(gamelog.series(mine, "seconds"))
+    ch.records.set_points(gamelog.series(mine, "win_time"), gamelog.best_curve(mine, "win_time", "min"))
 
 
 # --- настройки ---
