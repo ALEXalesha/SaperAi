@@ -188,3 +188,28 @@ def test_multiline_label_measured_by_its_longest_line(qapp):
     assert text_clipped(lb)
     lb.resize(lb.sizeHint().width() - 20, lb.sizeHint().height())    # длинная строка не влезла
     assert text_clipped(lb)
+
+
+def test_cut_descenders_are_caught(qapp):
+    """Cambria в Qt: нижний вынос шрифта 0, хвосты «р», «у» срезаются; подпись такой высоты -
+    обрезана (Морской бой 17.10: «одному» как «одномv»)."""
+    from PySide6.QtGui import QFont, QFontMetricsF
+
+    from aikit.menu import descender_deficit, text_clipped
+    f = QFont("Cambria")
+    f.setPixelSize(19)
+    fm = QFontMetricsF(f)
+    lb = QLabel("Морской бой · по одному")
+    lb.setFont(f)
+    lb.resize(lb.sizeHint())
+    if fm.descent() < 1:                       # шрифт с нулевым выносом есть в системе
+        assert descender_deficit(fm, lb.text()) > 2
+        assert text_clipped(lb)
+    g = QFont("Georgia")
+    g.setPixelSize(19)
+    ok = QLabel("Морской бой · по одному")
+    ok.setFont(g)
+    ok.resize(ok.sizeHint())
+    assert descender_deficit(QFontMetricsF(g), ok.text()) < 1 and not text_clipped(ok)
+    lb.setFixedHeight(round(fm.height() + descender_deficit(fm, lb.text())) + 2)
+    assert not text_clipped(lb)
